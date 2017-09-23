@@ -152,5 +152,5 @@ func (m *MovieParser) Parse(name string) (Movie, error) {
 
 	absCut := len(strings.Join(parts[:cutPart], " "))
 	m.logger.Infof("after parts check, cut data would be: `%s` abs_cut: %d\n", name[:absCut], absCut)
-	return Movie{Name: name[:absCut], Year: year, Quality: m.ParseQuality(name)}, nil
+	return Movie{Name: name[:absCut], Year: year, Quality: m.ParseQuality(name[absCut:])}, nil
 }

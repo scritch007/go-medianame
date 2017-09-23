@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -8,15 +9,24 @@ import (
 	"github.com/scritch007/go-moviename"
 )
 
+var debug bool
+
+func init() {
+	flag.BoolVar(&debug, "v", false, "Enable debug logs")
+}
+
 func main() {
+	flag.Parse()
 	logger := log.New("cmdLine")
-	logger.SetLevel(log.DEBUG)
+	if debug {
+		logger.SetLevel(log.DEBUG)
+	}
 	mp := moviename.NewMovieParser(logger)
-	if len(os.Args) != 2 {
+	if len(flag.Args()) != 1 {
 		fmt.Printf("Usage: %s filename", os.Args[0])
 		os.Exit(1)
 	}
-	m, err := mp.Parse(os.Args[1])
+	m, err := mp.Parse(flag.Args()[0])
 	if err != nil {
 		fmt.Printf("%v", err)
 		os.Exit(1)

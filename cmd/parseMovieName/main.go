@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/labstack/gommon/log"
 	"github.com/scritch007/go-moviename"
 )
 
 func main() {
-	mp := moviename.NewMovieParser()
+	logger := log.New("cmdLine")
+	logger.SetLevel(log.DEBUG)
+	mp := moviename.NewMovieParser(logger)
 	if len(os.Args) != 2 {
 		fmt.Printf("Usage: %s filename", os.Args[0])
 		os.Exit(1)
@@ -18,5 +21,5 @@ func main() {
 		fmt.Printf("%v", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%s\n", m.Name)
+	fmt.Printf("%s (%d) => %s\n", m.Name, m.Year, m.Quality)
 }

@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/labstack/gommon/log"
-	"github.com/scritch007/go-moviename"
+	"github.com/scritch007/go-medianame"
 )
 
 var debug bool

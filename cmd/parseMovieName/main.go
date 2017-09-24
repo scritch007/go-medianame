@@ -21,7 +21,7 @@ func main() {
 	if debug {
 		logger.SetLevel(log.DEBUG)
 	}
-	mp := moviename.NewMovieParser(logger)
+	mp := medianame.NewMovieParser(logger)
 	if len(flag.Args()) != 1 {
 		fmt.Printf("Usage: %s filename", os.Args[0])
 		os.Exit(1)

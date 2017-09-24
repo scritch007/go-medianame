@@ -1,4 +1,4 @@
-package moviename
+package medianame
 
 import (
 	"regexp"

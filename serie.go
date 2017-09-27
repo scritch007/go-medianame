@@ -4,43 +4,45 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
+
 	"strconv"
 	"strings"
 
+	regexp "github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 	"github.com/labstack/gommon/log"
 )
 
 var (
 	separators = "[/ -]"
 
-	unwantedRegexps = []*regexp.Regexp{
-		regexp.MustCompile("(?i)(\\d{1,3})\\s?x\\s?(0+)[^1-9]"), //5x0
-		regexp.MustCompile("(?i)S(\\d{1,3})D(\\d{1,3})"),        //S3D1
-		regexp.MustCompile("(?i)(?:s|series|\\b)\\s?\\d\\s?(?:&\\s?\\d)?[\\s-]*(?:complete|full)"),
-		regexp.MustCompile("(?i)disc\\s\\d"),
+	unwantedRegexps = []regexp.Regexp{
+		regexp.MustCompile("(\\d{1,3})\\s?x\\s?(0+)[^1-9]", regexp.CASELESS), //5x0
+		regexp.MustCompile("S(\\d{1,3})D(\\d{1,3})", regexp.CASELESS),        //S3D1
+		regexp.MustCompile("(?:s|series|\\b)\\s?\\d\\s?(?:&\\s?\\d)?[\\s-]*(?:complete|full)", regexp.CASELESS),
+		regexp.MustCompile("disc\\s\\d", regexp.CASELESS),
 	}
 
 	//Make sure none of these are found embedded within a word or other numbers
-	dateRegexps = []*regexp.Regexp{
-		notInWord(fmt.Sprintf("(?i)(\\d{2,4})%s(\\d{1,2})%s(\\d{1,2})", separators, separators)),
-		notInWord(fmt.Sprintf("(?i)(\\d{1,2})%s(\\d{1,2})%s(\\d{2,4})", separators, separators)),
-		notInWord(fmt.Sprintf("(?i)(\\d{4})x(\\d{1,2})%s(\\d{1,2})", separators)),
-		notInWord(fmt.Sprintf("(?i)(\\d{1,2})(?:st|nd|rd|th)?%s([a-z]{3,10})%s(\\d{4})", separators, separators)),
+	dateRegexps = []regexp.Regexp{
+		notInWord(fmt.Sprintf("(\\d{2,4})%s(\\d{1,2})%s(\\d{1,2})", separators, separators)),
+		notInWord(fmt.Sprintf("(\\d{1,2})%s(\\d{1,2})%s(\\d{2,4})", separators, separators)),
+		notInWord(fmt.Sprintf("(\\d{4})x(\\d{1,2})%s(\\d{1,2})", separators)),
+		notInWord(fmt.Sprintf("(\\d{1,2})(?:st|nd|rd|th)?%s([a-z]{3,10})%s(\\d{4})", separators, separators)),
 	}
 
 	romanNumeralRe = "X{0,3}(?:IX|XI{0,4}|VI{0,4}|IV|V|I{1,4})"
 
-	seasonPackRegexps = []*regexp.Regexp{
+	seasonPackRegexps = []regexp.Regexp{
 		//S01 or Season 1 but not Season 1 Episode|Part 2
-		regexp.MustCompile(fmt.Sprintf("(?i)(?:season\\s?|s)(\\d{1,})(?:\\s|$)(?:^(?:(?:.*?\\s)?(?:episode|e|ep|part|pt)\\s?(?:\\d{1,3}|%s)|(?:\\d{1,3})\\s?of\\s?(?:\\d{1,3})))", romanNumeralRe)),
-		regexp.MustCompile("(?i)(\\d{1,3})\\s?x\\s?all'"), // 1xAll
+		regexp.MustCompile(fmt.Sprintf("(?:season\\s?|s)(\\d{1,})(?:\\s|$)(?!(?:(?:.*?\\s)?(?:episode|e|ep|part|pt)\\s?(?:\\d{1,3}|%s)|(?:\\d{1,3})\\s?of\\s?(?:\\d{1,3})))", romanNumeralRe), regexp.CASELESS),
+		regexp.MustCompile("(\\d{1,3})\\s?x\\s?all'", regexp.CASELESS), // 1xAll
 	}
 
 	englishNumbers = []string{"one", "two", "three", "four", "five", "six", "seven",
 		"eight", "nine", "ten"}
 
-	epRegexps = []*regexp.Regexp{
+	epRegexps = []regexp.Regexp{
+		//regexp.MustCompile("(?:s)(?P<season>\\d{1,4})(?P<episode>(?:e\\d{1,3}))+"),
 		notInWord(fmt.Sprintf("(?:series|season|s)\\s?(\\d{1,4})(?:\\s(?:.*\\s)?)?(?:episode|ep|e|part|pt)\\s?(\\d{1,3}|%s)(?:\\s?e?(\\d{1,2}))?", romanNumeralRe)),
 		notInWord(fmt.Sprintf("(?:series|season)\\s?(\\d{1,4})\\s(\\d{1,3})\\s?of\\s?(?:\\d{1,3})")),
 		notInWord(fmt.Sprintf("(\\d{1,2})\\s?x\\s?(\\d+)(?:\\s(\\d{1,2}))?")),
@@ -56,6 +58,10 @@ var (
 		"(?:HD.2160p?:)",
 	}
 )
+
+func notInWord(re string) regexp.Regexp {
+	return regexp.MustCompile( /*"(?<![^\\W_])"+*/ re /*+"(?![^\\W_])"*/, regexp.CASELESS)
+}
 
 //Serie Represent serie object
 type Serie struct {
@@ -83,6 +89,7 @@ func (s *SerieParser) guessName(name string) string {
 	}
 	matched, matchResult := s.parseIt(name, unwantedRegexps, dummyMatch)
 	if matched {
+		s.logger.Debugf("Matched %s", matchResult.Matches[0].Value)
 		return ""
 	}
 	identifiedBy := ""
@@ -102,15 +109,15 @@ func (s *SerieParser) guessName(name string) string {
 	s.logger.Infof("Found a match %s", matchResult.Matches[0])
 	if matchResult.Matches[0].Index > 1 {
 		start := 0
-		ignoreReg := regexp.MustCompile(strings.Join(ignorePrefixes, "|"))
-		match := ignoreReg.FindString(name)
-		if len(match) != 0 {
-			start = strings.Index(name, match)
+		ignoreReg := regexp.MustCompile(strings.Join(ignorePrefixes, "|"), regexp.CASELESS)
+		match := ignoreReg.MatcherString(name, regexp.NOTEMPTY)
+		if match.Groups() != 0 {
+			start = strings.Index(name, match.GroupString(0))
 		}
 		name = name[start:matchResult.Matches[0].Index]
 		name = strings.Split(name, " - ")[0]
-		specialReg := regexp.MustCompile("[\\._\\(\\) ]+")
-		name = specialReg.ReplaceAllString(name, " ")
+		specialReg := regexp.MustCompile("[\\._\\(\\) ]+", regexp.CASELESS)
+		name = string(specialReg.ReplaceAll([]byte(name), []byte(" "), 0))
 		name = strings.Trim(name, " -")
 		name = strings.ToTitle(name)
 		return name
@@ -119,9 +126,9 @@ func (s *SerieParser) guessName(name string) string {
 	return name
 }
 
-type matchCB func(matches []string) (bool, interface{})
+type matchCB func(matches *regexp.Matcher) (bool, interface{})
 
-func dummyMatch(matches []string) (bool, interface{}) {
+func dummyMatch(matches *regexp.Matcher) (bool, interface{}) {
 	return true, nil
 }
 
@@ -134,20 +141,24 @@ type matchResult struct {
 	context interface{}
 }
 
-func (s *SerieParser) parseIt(name string, regexps []*regexp.Regexp, cb matchCB) (bool, matchResult) {
+func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) (bool, matchResult) {
 	name = strings.ToLower(name)
 	for _, re := range regexps {
-		matches := re.FindAllString(name, -1)
-		if len(matches) >= 1 {
-			log.Infof("Found matches %v, %v", re, name)
+
+		matches := re.MatcherString(name, regexp.NOTEMPTY)
+		if matches.Matches() {
+			log.Infof("Found matches %s, %v, %v", re, name, matches)
 
 			if matched, context := cb(matches); matched {
 				res := matchResult{
-					Matches: make([]match, len(matches)),
+					Matches: make([]match, matches.Groups()),
 					context: context,
 				}
 				offset := 0
-				for i, m := range matches {
+				for i := 0; i < matches.Groups(); i++ {
+					m := matches.GroupString(i)
+					mbyte := matches.Group(i)
+					s.logger.Debugf("====>%v", mbyte)
 					offset += strings.Index(name[offset:], m)
 					res.Matches[i] = match{
 						Value: m,
@@ -163,8 +174,8 @@ func (s *SerieParser) parseIt(name string, regexps []*regexp.Regexp, cb matchCB)
 	return false, matchResult{}
 }
 
-func (s *SerieParser) seasonCB(matches []string) (bool, interface{}) {
-	if len(matches) == 1 {
+func (s *SerieParser) seasonCB(matches *regexp.Matcher) (bool, interface{}) {
+	if matches.Groups() == 1 {
 		return true, nil
 	}
 	return false, nil
@@ -175,23 +186,27 @@ type episodeMatch struct {
 	Season  int
 }
 
-func (s *SerieParser) episodeCB(matches []string) (bool, interface{}) {
+func (s *SerieParser) episodeCB(matches *regexp.Matcher) (bool, interface{}) {
 	season := 0
 	episode := 0
 	s.logger.Debugf("%v", matches)
-	if len(matches) != 0 {
+	if matches.Groups() != 0 {
 		var epError error
 		strEp := ""
-		if len(matches) == 2 {
-			season, _ = strconv.Atoi(matches[0])
-			episode, epError = strconv.Atoi(matches[1])
-			strEp = matches[1]
-		} else if len(matches) == 1 {
+		if matches.Groups() == 3 {
+			strEp = matches.GroupString(2)
+			season, _ = strconv.Atoi(matches.GroupString(1))
+			episode, epError = strconv.Atoi(strEp)
+
+		} else if matches.Groups() == 2 {
 			season = 1
-			episode, epError = strconv.Atoi(matches[0])
-			strEp = matches[0]
+			strEp = matches.GroupString(1)
+			episode, epError = strconv.Atoi(strEp)
 		} else {
-			s.logger.Errorf("Unknown matches length %d", len(matches))
+			s.logger.Errorf("Unknown matches length %d", matches.Groups())
+			for i := 0; i < matches.Groups(); i++ {
+				s.logger.Debugf("=>%s", matches.GroupString(i))
+			}
 			return false, nil
 		}
 		if epError != nil {

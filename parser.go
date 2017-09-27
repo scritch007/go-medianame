@@ -1,9 +1,5 @@
 package medianame
 
-import (
-	"regexp"
-)
-
 var (
 	specials = []string{"special", "bonus", "extra", "omake", "ova"}
 	editions = []string{"dc", "extended", "uncut", "remastered", "unrated", "theatrical", "chrono", "se"}
@@ -32,8 +28,4 @@ func stringInSlice(s string, slice []string) bool {
 		}
 	}
 	return false
-}
-
-func notInWord(re string) *regexp.Regexp {
-	return regexp.MustCompile("([^\\W_])" + re + "([^\\W_])")
 }

@@ -43,7 +43,7 @@ var (
 
 	epRegexps = []regexp.Regexp{
 		//regexp.MustCompile("(?:s)(?P<season>\\d{1,4})(?P<episode>(?:e\\d{1,3}))+"),
-		notInWord(fmt.Sprintf("(?:series|season|s)\\s?(\\d{1,4})(?:\\s(?:.*\\s)?)?(?:episode|ep|e|part|pt)\\s?(\\d{1,3}|%s)(?:\\s?e?(\\d{1,2}))?", romanNumeralRe)),
+		notInWord(fmt.Sprintf("(?:series|season|s)\\s?(\\d{1,4})(?:\\s(?:.*\\s)?)?(?:episode|ep|e|part|pt)\\s?(\\d{1,3}|%s)(?:\\s?e(\\d{1,2}))*", romanNumeralRe)),
 		notInWord(fmt.Sprintf("(?:series|season)\\s?(\\d{1,4})\\s(\\d{1,3})\\s?of\\s?(?:\\d{1,3})")),
 		notInWord(fmt.Sprintf("(\\d{1,2})\\s?x\\s?(\\d+)(?:\\s(\\d{1,2}))?")),
 		notInWord(fmt.Sprintf("(\\d{1,3})\\s?of\\s?(?:\\d{1,3})")),
@@ -65,10 +65,11 @@ func notInWord(re string) regexp.Regexp {
 
 //Serie Represent serie object
 type Serie struct {
-	Name    string
-	Episode int
-	Season  int
-	Quality string
+	Name       string
+	Episode    int
+	Season     int
+	Quality    string
+	EndEpisode int
 }
 
 //SerieParser parser object
@@ -123,12 +124,17 @@ func (s *SerieParser) guessName(name string) string {
 		return name
 	}
 	s.logger.Debugf("Identified by %s", identifiedBy)
+
+	switch matchResult.context.(type) {
+	case *episodeMatch:
+		s.logger.Debugf("Matched the episde!!\n")
+	}
 	return name
 }
 
-type matchCB func(matches *regexp.Matcher) (bool, interface{})
+type matchCB func(matches matchResult) (bool, interface{})
 
-func dummyMatch(matches *regexp.Matcher) (bool, interface{}) {
+func dummyMatch(matches matchResult) (bool, interface{}) {
 	return true, nil
 }
 
@@ -147,24 +153,33 @@ func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) 
 
 		matches := re.MatcherString(name, regexp.NOTEMPTY)
 		if matches.Matches() {
-			log.Infof("Found matches %s, %v, %v", re, name, matches)
+			log.Infof("Found matches %s, %v, %v", string(fmt.Sprintf("%s", re)), name, matches)
+			nbMatch := 1
+			for i := 1; i <= matches.Groups(); i++ {
+				if matches.Present(i) {
+					nbMatch++
+				} else {
+					break
+				}
+			}
+			s.logger.Debugf("nbMatch %s", nbMatch)
 
-			if matched, context := cb(matches); matched {
-				res := matchResult{
-					Matches: make([]match, matches.Groups()),
-					context: context,
+			res := matchResult{
+				Matches: make([]match, nbMatch),
+			}
+			offset := 0
+			for i := 1; i < nbMatch; i++ {
+				m := matches.GroupString(i)
+				mbyte := matches.Group(i)
+				s.logger.Debugf("====>%s", mbyte)
+				offset += strings.Index(name[offset:], m)
+				res.Matches[i] = match{
+					Value: m,
+					Index: offset,
 				}
-				offset := 0
-				for i := 0; i < matches.Groups(); i++ {
-					m := matches.GroupString(i)
-					mbyte := matches.Group(i)
-					s.logger.Debugf("====>%v", mbyte)
-					offset += strings.Index(name[offset:], m)
-					res.Matches[i] = match{
-						Value: m,
-						Index: offset,
-					}
-				}
+			}
+			if matched, context := cb(res); matched {
+				res.context = context
 				return true, res
 			}
 		} else {
@@ -174,39 +189,41 @@ func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) 
 	return false, matchResult{}
 }
 
-func (s *SerieParser) seasonCB(matches *regexp.Matcher) (bool, interface{}) {
-	if matches.Groups() == 1 {
+func (s *SerieParser) seasonCB(matches matchResult) (bool, interface{}) {
+	if len(matches.Matches) == 1 {
 		return true, nil
 	}
 	return false, nil
 }
 
 type episodeMatch struct {
-	Episode int
-	Season  int
+	Episode    int
+	Season     int
+	EndEpisode int
 }
 
-func (s *SerieParser) episodeCB(matches *regexp.Matcher) (bool, interface{}) {
+func (s *SerieParser) episodeCB(matches matchResult) (bool, interface{}) {
 	season := 0
 	episode := 0
-	s.logger.Debugf("%v", matches)
-	if matches.Groups() != 0 {
+	endEpisode := 0
+	s.logger.Debugf("Found %d matches", len(matches.Matches))
+	nbMatches := len(matches.Matches)
+	if nbMatches != 0 {
 		var epError error
 		strEp := ""
-		if matches.Groups() == 3 {
-			strEp = matches.GroupString(2)
-			season, _ = strconv.Atoi(matches.GroupString(1))
+		if nbMatches >= 2 {
+			strEp = matches.Matches[1].Value
+			season, _ = strconv.Atoi(matches.Matches[0].Value)
 			episode, epError = strconv.Atoi(strEp)
-
-		} else if matches.Groups() == 2 {
+			if nbMatches == 3 {
+				endEpisode, _ = strconv.Atoi(matches.Matches[2].Value)
+			}
+		} else if nbMatches == 1 {
 			season = 1
-			strEp = matches.GroupString(1)
+			strEp = matches.Matches[1].Value
 			episode, epError = strconv.Atoi(strEp)
 		} else {
-			s.logger.Errorf("Unknown matches length %d", matches.Groups())
-			for i := 0; i < matches.Groups(); i++ {
-				s.logger.Debugf("=>%s", matches.GroupString(i))
-			}
+			s.logger.Errorf("Unknown matches length %d", nbMatches)
 			return false, nil
 		}
 		if epError != nil {
@@ -227,8 +244,9 @@ func (s *SerieParser) episodeCB(matches *regexp.Matcher) (bool, interface{}) {
 			return false, nil
 		}
 		return true, &episodeMatch{
-			Episode: episode,
-			Season:  season,
+			Episode:    episode,
+			Season:     season,
+			EndEpisode: endEpisode,
 		}
 	}
 	return false, nil

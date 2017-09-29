@@ -84,14 +84,16 @@ func NewSerieParser(logger *log.Logger) *SerieParser {
 	}
 }
 
-func (s *SerieParser) guessName(name string) string {
+func (s *SerieParser) guessName(name string) (result Serie, err error) {
+
 	for _, c := range "_.,[]():" {
 		name = strings.Replace(name, string(c), " ", -1)
 	}
 	matched, matchResult := s.parseIt(name, unwantedRegexps, dummyMatch)
 	if matched {
 		s.logger.Debugf("Matched %s", matchResult.Matches[0].Value)
-		return ""
+		err = errors.New("Matched unwanted names")
+		return
 	}
 	identifiedBy := ""
 	matched, matchResult = s.parseIt(name, dateRegexps, dummyMatch)
@@ -105,9 +107,13 @@ func (s *SerieParser) guessName(name string) string {
 		identifiedBy = "ep"
 	}
 	if !matched {
-		return ""
+		err = errors.New("No match found")
+		return
 	}
-	s.logger.Infof("Found a match %s", matchResult.Matches[0])
+
+	extra := ""
+
+	s.logger.Infof("Found a match %s", matchResult.Matches)
 	if matchResult.Matches[0].Index > 1 {
 		start := 0
 		ignoreReg := regexp.MustCompile(strings.Join(ignorePrefixes, "|"), regexp.CASELESS)
@@ -115,21 +121,28 @@ func (s *SerieParser) guessName(name string) string {
 		if match.Groups() != 0 {
 			start = strings.Index(name, match.GroupString(0))
 		}
-		name = name[start:matchResult.Matches[0].Index]
+		extra = name[matchResult.Matches[0].Index:]
+		name = name[start : matchResult.Matches[0].Index-1]
 		name = strings.Split(name, " - ")[0]
 		specialReg := regexp.MustCompile("[\\._\\(\\) ]+", regexp.CASELESS)
 		name = string(specialReg.ReplaceAll([]byte(name), []byte(" "), 0))
 		name = strings.Trim(name, " -")
 		name = strings.ToTitle(name)
-		return name
 	}
 	s.logger.Debugf("Identified by %s", identifiedBy)
 
+	result.Quality = ParseQuality(extra, s.logger)
 	switch matchResult.context.(type) {
 	case *episodeMatch:
-		s.logger.Debugf("Matched the episde!!\n")
+		s.logger.Debugf("Matched the episode!!\n")
+		em := matchResult.context.(*episodeMatch)
+		result.EndEpisode = em.EndEpisode
+		result.Episode = em.Episode
+		result.Season = em.Season
 	}
-	return name
+	result.Name = name
+
+	return
 }
 
 type matchCB func(matches matchResult) (bool, interface{})
@@ -165,7 +178,7 @@ func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) 
 			s.logger.Debugf("nbMatch %s", nbMatch)
 
 			res := matchResult{
-				Matches: make([]match, nbMatch),
+				Matches: make([]match, nbMatch-1),
 			}
 			offset := 0
 			for i := 1; i < nbMatch; i++ {
@@ -173,7 +186,7 @@ func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) 
 				mbyte := matches.Group(i)
 				s.logger.Debugf("====>%s", mbyte)
 				offset += strings.Index(name[offset:], m)
-				res.Matches[i] = match{
+				res.Matches[i-1] = match{
 					Value: m,
 					Index: offset,
 				}
@@ -262,6 +275,5 @@ func (s *SerieParser) Parse(name string) (Serie, error) {
 	//Remove extension
 	ext := filepath.Ext(name)
 	name = name[:len(name)-len(ext)]
-	name = s.guessName(name)
-	return Serie{Name: name}, nil
+	return s.guessName(name)
 }

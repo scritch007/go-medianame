@@ -32,5 +32,5 @@ func main() {
 		fmt.Printf("%v", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%s (%d) => %s\n", m.Name, m.Episode, m.Quality)
+	fmt.Printf("%s (%dx%d->%d) => %s\n", m.Name, m.Season, m.Episode, m.EndEpisode, m.Quality)
 }

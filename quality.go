@@ -3,6 +3,8 @@ package medianame
 import (
 	"regexp"
 	"strings"
+
+	"github.com/labstack/gommon/log"
 )
 
 const (
@@ -89,13 +91,13 @@ func init() {
 }
 
 //ParseQuality return the best quality value
-func (m *MovieParser) ParseQuality(name string) string {
+func ParseQuality(name string, logger *log.Logger) string {
 	name = strings.ToLower(name)
 	resolution := ""
 	source := ""
 	for _, res := range resolutions {
 		re := res.r
-		m.logger.Debugf("looking at %s with %s", name, res.n)
+		logger.Debugf("looking at %s with %s", name, res.n)
 		match := re.FindStringSubmatch(name)
 		if match != nil {
 			resolution = res.n
@@ -104,7 +106,7 @@ func (m *MovieParser) ParseQuality(name string) string {
 	}
 	for _, res := range sources {
 		re := res.r
-		m.logger.Debugf("looking at %s with %s", name, res.n)
+		logger.Debugf("looking at %s with %s", name, res.n)
 		match := re.FindStringSubmatch(name)
 		if match != nil {
 			source = res.n

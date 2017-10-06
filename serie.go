@@ -42,7 +42,6 @@ var (
 		"eight", "nine", "ten"}
 
 	epRegexps = []regexp.Regexp{
-		//regexp.MustCompile("(?:s)(?P<season>\\d{1,4})(?P<episode>(?:e\\d{1,3}))+"),
 		notInWord(fmt.Sprintf("(?:series|season|s)\\s?(\\d{1,4})(?:\\s(?:.*\\s)?)?(?:episode|ep|e|part|pt)\\s?(\\d{1,3}|%s)(?:\\s?e(\\d{1,2}))*", romanNumeralRe)),
 		notInWord(fmt.Sprintf("(?:series|season)\\s?(\\d{1,4})\\s(\\d{1,3})\\s?of\\s?(?:\\d{1,3})")),
 		notInWord(fmt.Sprintf("(\\d{1,2})\\s?x\\s?(\\d+)(?:\\s(\\d{1,2}))?")),
@@ -113,7 +112,7 @@ func (s *SerieParser) guessName(name string) (result Serie, err error) {
 
 	extra := ""
 
-	s.logger.Infof("Found a match %s", matchResult.Matches)
+	s.logger.Debugf("Found a match %s", matchResult.Matches)
 	if matchResult.Matches[0].Index > 1 {
 		start := 0
 		ignoreReg := regexp.MustCompile(strings.Join(ignorePrefixes, "|"), regexp.CASELESS)
@@ -166,7 +165,7 @@ func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) 
 
 		matches := re.MatcherString(name, regexp.NOTEMPTY)
 		if matches.Matches() {
-			log.Infof("Found matches %s, %v, %v", string(fmt.Sprintf("%s", re)), name, matches)
+			s.logger.Debugf("Found matches %s, %v, %v", string(fmt.Sprintf("%s", re)), name, matches)
 			nbMatch := 1
 			for i := 1; i <= matches.Groups(); i++ {
 				if matches.Present(i) {
@@ -233,7 +232,7 @@ func (s *SerieParser) episodeCB(matches matchResult) (bool, interface{}) {
 			}
 		} else if nbMatches == 1 {
 			season = 1
-			strEp = matches.Matches[1].Value
+			strEp = matches.Matches[0].Value
 			episode, epError = strconv.Atoi(strEp)
 		} else {
 			s.logger.Errorf("Unknown matches length %d", nbMatches)

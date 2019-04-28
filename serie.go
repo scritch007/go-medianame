@@ -96,8 +96,7 @@ func (s *SerieParser) guessName(name string) (result Serie, err error) {
 
 	excludePrefixList := []excludePrefix{{Start: "[", Stop: "]"}, {Start: "HD", Stop: "720p"}, {Start: "HD", Stop: "1080p"},}
 	for _, e := range excludePrefixList {
-		log.Infof("################## %s\n", name)
-		if name[:len(e.Start)] == e.Start {
+		if len(name) > len(e.Start) && name[:len(e.Start)] == e.Start {
 			name = strings.TrimSpace(name[strings.Index(name, e.Stop)+len(e.Stop):])
 		}
 

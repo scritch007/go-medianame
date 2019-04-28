@@ -51,7 +51,7 @@ var (
 	}
 
 	ignorePrefixes = []string{
-		"(?:\\[[^\\[\\]]*\\])",
+		"(?:\\[[^\\[.*\\]]*\\])",
 		"(?:HD.720p?:)",
 		"(?:HD.1080p?:)",
 		"(?:HD.2160p?:)",
@@ -85,7 +85,25 @@ func NewSerieParser(logger *log.Logger) *SerieParser {
 
 func (s *SerieParser) guessName(name string) (result Serie, err error) {
 
-	for _, c := range "_.,[]():" {
+	for _, c := range "_.," {
+		name = strings.Replace(name, string(c), " ", -1)
+	}
+
+	type excludePrefix struct {
+		Start string
+		Stop  string
+	}
+
+	excludePrefixList := []excludePrefix{{Start: "[", Stop: "]"}, {Start: "HD", Stop: "720p"}, {Start: "HD", Stop: "1080p"},}
+	for _, e := range excludePrefixList {
+		log.Infof("################## %s\n", name)
+		if name[:len(e.Start)] == e.Start {
+			name = strings.TrimSpace(name[strings.Index(name, e.Stop)+len(e.Stop):])
+		}
+
+	}
+
+	for _, c := range "[]():" {
 		name = strings.Replace(name, string(c), " ", -1)
 	}
 	matched, matchResult := s.parseIt(name, unwantedRegexps, dummyMatch)

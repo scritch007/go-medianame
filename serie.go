@@ -112,16 +112,17 @@ func (s *SerieParser) guessName(name string) (result Serie, err error) {
 		return
 	}
 	identifiedBy := ""
-	matched, matchResult = s.parseIt(name, dateRegexps, dummyMatch)
-	if matched {
-		identifiedBy = "date"
-	} else {
-		matched, matchResult = s.parseIt(name, seasonPackRegexps, s.seasonCB)
-		if !matched {
-			matched, matchResult = s.parseIt(name, epRegexps, s.episodeCB)
-		}
-		identifiedBy = "ep"
+
+	matched, matchResult = s.parseIt(name, seasonPackRegexps, s.seasonCB)
+	if !matched {
+		matched, matchResult = s.parseIt(name, epRegexps, s.episodeCB)
 	}
+	identifiedBy = "ep"
+	if !matched {
+		matched, matchResult = s.parseIt(name, dateRegexps, dummyMatch)
+		identifiedBy = "date"
+	}
+
 	if !matched {
 		err = errors.New("No match found")
 		return
@@ -178,11 +179,11 @@ type matchResult struct {
 
 func (s *SerieParser) parseIt(name string, regexps []regexp.Regexp, cb matchCB) (bool, matchResult) {
 	name = strings.ToLower(name)
-	for _, re := range regexps {
+	for regID, re := range regexps {
 
 		matches := re.MatcherString(name, regexp.NOTEMPTY)
 		if matches.Matches() {
-			s.logger.Debugf("Found matches %s, %v, %v", string(fmt.Sprintf("%s", re)), name, matches)
+			s.logger.Debugf("Found matches [%d] %s, %v, %v", regID, string(fmt.Sprintf("%s", re)), name, matches)
 			nbMatch := 1
 			for i := 1; i <= matches.Groups(); i++ {
 				if matches.Present(i) {
